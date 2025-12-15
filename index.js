@@ -15,11 +15,7 @@ const state = {
   minuteTimes: [],
   windowIdKey: 'smart.listening.lowbar',
   defaultCenterItems: [
-    { id: 'open-settings', text: '听力设置', icon: 'ri-settings-5-line' },
-    { id: 'prev-track', text: '上一首', icon: 'ri-skip-back-mini-line' },
-    { id: 'toggle-play', text: '播放', icon: 'ri-play-line' },
-    { id: 'next-track', text: '下一首', icon: 'ri-skip-forward-mini-line' },
-    { id: 'speed-setting', text: '倍速设置', icon: 'ri-speed-line' }
+    { id: 'toggle-play', text: '播放', icon: 'ri-play-line' }
   ]
 };
 
@@ -102,23 +98,18 @@ const functions = {
     try {
       restore();
       const bgHome = path.join(__dirname, 'background', 'home.html');
-      const settings = path.join(__dirname, 'float', 'settings.html');
       state.backgroundHome = url.pathToFileURL(bgHome).href;
-      state.floatPages = { settings: url.pathToFileURL(settings).href };
       const params = {
         id: state.windowIdKey,
         title: '智慧听力',
         eventChannel: state.eventChannel,
         subscribeTopics: [state.eventChannel],
         callerPluginId: 'smart.listening',
-        windowMode: 'fullscreen_only',
+        windowMode: 'windowed_only',
         icon: 'ri-headphone-line',
         floatingSizePercent: 50,
         floatingBounds: 'center',
-        leftItems: [
-          { id: 'prev-today', text: '<', icon: 'ri-arrow-left-s-line' },
-          { id: 'next-today', text: '>', icon: 'ri-arrow-right-s-line' }
-        ],
+        leftItems: [],
         centerItems: buildCenterItems(),
         backgroundUrl: state.backgroundHome,
         floatingUrl: null
@@ -133,54 +124,13 @@ const functions = {
       if (!payload || typeof payload !== 'object') return true;
       try { pluginApi.emit(state.eventChannel, payload); } catch {}
       if (payload.type === 'click') {
-        if (payload.id === 'open-settings') {
-          emitUpdate('floatingBounds', 'center');
-          emitUpdate('floatingBounds', { width: 640, height: 420 });
-          emitUpdate('floatingUrl', state.floatPages.settings);
-        } else if (payload.id === 'prev-track') {
-          if (state.todayList.length) {
-            state.currentIndex = Math.max(0, state.currentIndex - 1);
-            state.playing = true;
-            emitUpdate('centerItems', buildCenterItems());
-            pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd: 'play', filePath: state.todayList[state.currentIndex], rate: state.rate });
-          }
-        } else if (payload.id === 'next-track') {
-          if (state.todayList.length) {
-            state.currentIndex = Math.min(state.todayList.length - 1, state.currentIndex + 1);
-            state.playing = true;
-            emitUpdate('centerItems', buildCenterItems());
-            pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd: 'play', filePath: state.todayList[state.currentIndex], rate: state.rate });
-          }
-        } else if (payload.id === 'toggle-play') {
+        if (payload.id === 'toggle-play') {
           state.playing = !state.playing;
           emitUpdate('centerItems', buildCenterItems());
           const cmd = state.playing ? 'resume' : 'pause';
           pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd });
-        } else if (payload.id === 'speed-setting') {
-          const next = state.rate >= 2.0 ? 1.0 : (state.rate >= 1.5 ? 2.0 : (state.rate >= 1.25 ? 1.5 : 1.25));
-          state.rate = next;
-          persist();
-          pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd: 'rate', rate: state.rate });
         } else if (payload.id === 'display-name') {
           // no-op
-        }
-      } else if (payload.type === 'left.click') {
-        if (payload.id === 'prev-today') {
-          if (state.todayList.length) {
-            state.currentIndex = Math.max(0, state.currentIndex - 1);
-            state.playing = true;
-            emitUpdate('centerItems', buildCenterItems());
-            pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd: 'play', filePath: state.todayList[state.currentIndex], rate: state.rate });
-          }
-        } else if (payload.id === 'next-today') {
-          if (state.todayList.length) {
-            state.currentIndex = Math.min(state.todayList.length - 1, state.currentIndex + 1);
-            state.playing = true;
-            emitUpdate('centerItems', buildCenterItems());
-            pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd: 'play', filePath: state.todayList[state.currentIndex], rate: state.rate });
-          }
-        } else {
-          // 透传其他左侧事件到前端
         }
       } else if (payload.type === 'player-ended') {
         const fp = String(payload.filePath || '');
@@ -290,6 +240,38 @@ const functions = {
     try { state.minuteTimes = []; persist(); pluginApi.automation.clearMinuteTriggers && pluginApi.automation.clearMinuteTriggers('smart.listening'); return { ok: true }; } catch (e) { return { ok: false, error: e?.message || String(e) }; }
   },
   listScheduleTimes: async () => { return { ok: true, times: state.minuteTimes.slice() }; },
+  getDesktopPath: async () => {
+    try {
+      const os = require('os');
+      const home = os.homedir();
+      const guess = path.join(home, 'Desktop');
+      return { ok: true, path: guess };
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
+  listEntries: async (dirPath) => {
+    try {
+      const fs = require('fs');
+      const p = String(dirPath || '').trim(); if (!p) return { ok: false, error: 'empty_dir' };
+      const entries = [];
+      try {
+        const names = fs.readdirSync(p);
+        for (const name of names) {
+          const f = path.join(p, name);
+          try {
+            const st = fs.statSync(f);
+            if (st.isDirectory()) {
+              entries.push({ path: f, name, type: 'dir' });
+            } else if (st.isFile()) {
+              const isAudio = /\.(mp3|wav|m4a|flac|ogg)$/i.test(name);
+              const meta = state.files[f] || { selected: false, listened: false };
+              entries.push({ path: f, name, type: 'file', isAudio, selected: !!meta.selected, listened: !!meta.listened });
+            }
+          } catch {}
+        }
+      } catch {}
+      return { ok: true, entries };
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
   getState: async () => {
     return { ok: true, dirs: state.dirs.slice(), files: state.files, today: state.todayList.slice(), rate: state.rate, playing: state.playing, currentIndex: state.currentIndex };
   }
