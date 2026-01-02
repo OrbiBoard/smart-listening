@@ -20,7 +20,7 @@ const state = {
 };
 
 function emitUpdate(target, value) {
-  try { pluginApi.emit(state.eventChannel, { type: 'update', target, value }); } catch {}
+  try { pluginApi.emit(state.eventChannel, { type: 'update', target, value }); } catch (e) {}
 }
 
 function currentAudioName() {
@@ -28,7 +28,7 @@ function currentAudioName() {
     const idx = state.currentIndex;
     const fp = (idx >= 0 && idx < state.todayList.length) ? state.todayList[idx] : '';
     return path.basename(String(fp || '')) || '';
-  } catch { return ''; }
+  } catch (e) { return ''; }
 }
 
 function buildCenterItems() {
@@ -49,7 +49,7 @@ function persist() {
     pluginApi.store.set('smartListening:todayList', state.todayList);
     pluginApi.store.set('smartListening:rate', state.rate);
     pluginApi.store.set('smartListening:minuteTimes', state.minuteTimes);
-  } catch {}
+  } catch (e) {}
 }
 
 function restore() {
@@ -64,7 +64,7 @@ function restore() {
     if (Array.isArray(today)) state.todayList = today;
     if (typeof rate === 'number') state.rate = rate;
     if (Array.isArray(times)) state.minuteTimes = times;
-  } catch {}
+  } catch (e) {}
 }
 
 function computeMinuteTimes(times) {
@@ -74,13 +74,13 @@ function computeMinuteTimes(times) {
 
 async function registerMinuteTriggers() {
   const times = computeMinuteTimes(state.minuteTimes);
-  try { pluginApi.automation.registerMinuteTriggers('smart.listening', times, handleMinuteTrigger); } catch {}
+  try { pluginApi.automation.registerMinuteTriggers('smart.listening', times, handleMinuteTrigger); } catch (e) {}
 }
 
 function handleMinuteTrigger(hhmm) {
   try {
     const payloads = [ { mode: 'sound', which: 'in' }, { mode: 'sound', which: 'in' }, { mode: 'sound', which: 'in' } ];
-    try { pluginApi.call('notify.plugin', 'enqueueBatch', [payloads]); } catch {}
+    try { pluginApi.call('notify.plugin', 'enqueueBatch', [payloads]); } catch (e) {}
     functions.openSmartListening({ activate: true });
     // 自动开始播放当日第一条未完成
     const nextIdx = state.todayList.findIndex((fp) => !(state.files[fp]?.listened));
@@ -90,7 +90,7 @@ function handleMinuteTrigger(hhmm) {
       emitUpdate('centerItems', buildCenterItems());
       pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd: 'play', filePath: state.todayList[nextIdx], rate: state.rate });
     }
-  } catch {}
+  } catch (e) {}
 }
 
 const functions = {
@@ -122,7 +122,7 @@ const functions = {
   onLowbarEvent: async (payload = {}) => {
     try {
       if (!payload || typeof payload !== 'object') return true;
-      try { pluginApi.emit(state.eventChannel, payload); } catch {}
+      try { pluginApi.emit(state.eventChannel, payload); } catch (e) {}
       if (payload.type === 'click') {
         if (payload.id === 'toggle-play') {
           state.playing = !state.playing;
@@ -188,9 +188,9 @@ const functions = {
               const meta = state.files[key] || { selected: false, listened: false };
               entries.push({ path: key, name, selected: !!meta.selected, listened: !!meta.listened });
             }
-          } catch {}
+          } catch (e) {}
         }
-      } catch {}
+      } catch (e) {}
       return { ok: true, files: entries };
     } catch (e) { return { ok: false, error: e?.message || String(e) }; }
   },
@@ -266,9 +266,9 @@ const functions = {
               const meta = state.files[f] || { selected: false, listened: false };
               entries.push({ path: f, name, type: 'file', isAudio, selected: !!meta.selected, listened: !!meta.listened });
             }
-          } catch {}
+          } catch (e) {}
         }
-      } catch {}
+      } catch (e) {}
       return { ok: true, entries };
     } catch (e) { return { ok: false, error: e?.message || String(e) }; }
   },
