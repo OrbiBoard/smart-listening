@@ -89,7 +89,7 @@
         if (!gActiveDir) return;
         curPathEl.textContent = gActiveDir;
         try {
-          const r = await api().pluginCall('smart.listening','listEntries',[gActiveDir]);
+          const r = await api().pluginCall('smart-listening','listEntries',[gActiveDir]);
           const list = (r && r.entries) || [];
           for (const it of list) {
             const row = document.createElement('div'); row.className = 'file';
@@ -101,14 +101,14 @@
             if (it.type === 'dir') {
               row.addEventListener('click', () => { gActiveDir = it.path; loadEntries(); });
             } else if (it.isAudio) {
-              row.addEventListener('click', async () => { try { await api().pluginCall('smart.listening','addToToday',[it.path]); await loadToday(); await loadEntries(); } catch (e) {} });
+              row.addEventListener('click', async () => { try { await api().pluginCall('smart-listening','addToToday',[it.path]); await loadToday(); await loadEntries(); } catch (e) {} });
             }
             filesEl.appendChild(row);
           }
         } catch (e) {}
       }
       async function loadToday() {
-        try { const r = await api().pluginCall('smart.listening','getState',[]); const s = r && r.ok ? r : { dirs:[], files:{}, today:[], rate:1.0, playing:false, currentIndex:-1 };
+        try { const r = await api().pluginCall('smart-listening','getState',[]); const s = r && r.ok ? r : { dirs:[], files:{}, today:[], rate:1.0, playing:false, currentIndex:-1 };
           gState = { ...gState, dirs: s.dirs || [], files: s.files || {}, today: s.today || [], rate: s.rate || 1.0, playing: !!s.playing, currentIndex: s.currentIndex ?? -1 };
           $('#today-count').textContent = '共 ' + (gState.today.length || 0) + ' 项';
         } catch (e) {}
@@ -134,7 +134,7 @@
         const arr = gState.today.slice();
         const [it] = arr.splice(from, 1);
         arr.splice(to, 0, it);
-        try { await api().pluginCall('smart.listening','reorderToday',[arr]); await loadToday(); } catch (e) {}
+        try { await api().pluginCall('smart-listening','reorderToday',[arr]); await loadToday(); } catch (e) {}
       }
 
       function bindAudio() {
@@ -142,10 +142,10 @@
         audio.addEventListener('timeupdate', () => {
           elapsed.textContent = fmt(audio.currentTime);
           if (audio.duration && isFinite(audio.duration)) seek.value = String(Math.floor(audio.currentTime / audio.duration * 100));
-          try { api().emitEvent('smart.listening.lowbar', { type:'player-progress', cur: Math.floor(audio.currentTime), dur: Math.floor(audio.duration||0) }); } catch (e) {}
+          try { api().emitEvent('smart-listening-lowbar', { type:'player-progress', cur: Math.floor(audio.currentTime), dur: Math.floor(audio.duration||0) }); } catch (e) {}
         });
         audio.addEventListener('ended', () => {
-          try { api().emitEvent('smart.listening.lowbar', { type:'player-ended', filePath: audio.dataset.path || '' }); } catch (e) {}
+          try { api().emitEvent('smart-listening-lowbar', { type:'player-ended', filePath: audio.dataset.path || '' }); } catch (e) {}
         });
         seek.addEventListener('input', () => {
           if (audio.duration && isFinite(audio.duration)) {
@@ -175,7 +175,7 @@
       }
 
       function onEvent(name, data) {
-        if (name !== 'smart.listening.lowbar' || !data) return;
+        if (name !== 'smart-listening-lowbar' || !data) return;
         if (data.type === 'control' && data.action === 'player') {
           if (data.cmd === 'play') {
             const fp = String(data.filePath || '').trim(); if (!fp) return;
@@ -199,7 +199,7 @@
 
       async function init() {
         bindAudio();
-        try { const r = await api().pluginCall('smart.listening','getDesktopPath',[]); gActiveDir = (r && r.path) || gActiveDir || ''; } catch (e) {}
+        try { const r = await api().pluginCall('smart-listening','getDesktopPath',[]); gActiveDir = (r && r.path) || gActiveDir || ''; } catch (e) {}
         await loadToday();
         await loadEntries();
         api().onEvent(onEvent);

@@ -24,14 +24,14 @@
     <script>
       const api = () => window.lowbarAPI;
       async function init() {
-        try { const r = await api().pluginCall('smart.listening','listScheduleTimes',[]); const list = (r && r.times) || []; document.getElementById('times').value = (list||[]).join('\n'); } catch (e) {}
+        try { const r = await api().pluginCall('smart-listening','listScheduleTimes',[]); const list = (r && r.times) || []; document.getElementById('times').value = (list||[]).join('\n'); } catch (e) {}
       }
       document.getElementById('save').addEventListener('click', async () => {
         const raw = document.getElementById('times').value || '';
         const lines = String(raw).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-        try { await api().pluginCall('smart.listening','setScheduleTimes',[lines]); alert('已保存'); } catch (e) { alert('保存失败'); }
+        try { await api().pluginCall('smart-listening','setScheduleTimes',[lines]); alert('已保存'); } catch (e) { alert('保存失败'); }
       });
-      document.getElementById('close').addEventListener('click', () => { try { api().emitEvent('smart.listening.lowbar', { type:'click', id:'close-settings' }); api().emitEvent('smart.listening.lowbar', { type:'update', target:'floatingUrl', value: null }); } catch (e) {} });
+      document.getElementById('close').addEventListener('click', () => { try { api().emitEvent('smart-listening-lowbar', { type:'click', id:'close-settings' }); api().emitEvent('smart-listening-lowbar', { type:'update', target:'floatingUrl', value: null }); } catch (e) {} });
       init();
     </script>
   </body>

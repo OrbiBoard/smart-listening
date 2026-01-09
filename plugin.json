@@ -1,5 +1,5 @@
 {
-  "id": "smart.listening",
+  "id": "smart-listening",
   "name": "智慧听力",
   "version": "0.1.0",
   "author": "OrbiBoard",
@@ -19,7 +19,7 @@
     "todayCount"
   ],
   "dependencies": [
-    "ui.lowbar",
-    "notify.plugin"
+    "ui-lowbar",
+    "notify-plugin"
   ]
 }

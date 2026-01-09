@@ -3,7 +3,7 @@ const url = require('url');
 let pluginApi = null;
 
 const state = {
-  eventChannel: 'smart.listening.lowbar',
+  eventChannel: 'smart-listening-lowbar',
   backgroundHome: '',
   floatPages: {},
   dirs: [],
@@ -13,7 +13,7 @@ const state = {
   playing: false,
   rate: 1.0,
   minuteTimes: [],
-  windowIdKey: 'smart.listening.lowbar',
+  windowIdKey: 'smart-listening-lowbar',
   defaultCenterItems: [
     { id: 'toggle-play', text: '播放', icon: 'ri-play-line' }
   ]
@@ -44,21 +44,21 @@ function buildCenterItems() {
 
 function persist() {
   try {
-    pluginApi.store.set('smartListening:dirs', state.dirs);
-    pluginApi.store.set('smartListening:files', state.files);
-    pluginApi.store.set('smartListening:todayList', state.todayList);
-    pluginApi.store.set('smartListening:rate', state.rate);
-    pluginApi.store.set('smartListening:minuteTimes', state.minuteTimes);
+    pluginApi.store.set('smart-listening:dirs', state.dirs);
+    pluginApi.store.set('smart-listening:files', state.files);
+    pluginApi.store.set('smart-listening:todayList', state.todayList);
+    pluginApi.store.set('smart-listening:rate', state.rate);
+    pluginApi.store.set('smart-listening:minuteTimes', state.minuteTimes);
   } catch (e) {}
 }
 
 function restore() {
   try {
-    const dirs = pluginApi.store.get('smartListening:dirs');
-    const files = pluginApi.store.get('smartListening:files');
-    const today = pluginApi.store.get('smartListening:todayList');
-    const rate = pluginApi.store.get('smartListening:rate');
-    const times = pluginApi.store.get('smartListening:minuteTimes');
+    const dirs = pluginApi.store.get('smart-listening:dirs');
+    const files = pluginApi.store.get('smart-listening:files');
+    const today = pluginApi.store.get('smart-listening:todayList');
+    const rate = pluginApi.store.get('smart-listening:rate');
+    const times = pluginApi.store.get('smart-listening:minuteTimes');
     if (Array.isArray(dirs)) state.dirs = dirs;
     if (files && typeof files === 'object') state.files = files;
     if (Array.isArray(today)) state.todayList = today;
@@ -74,13 +74,13 @@ function computeMinuteTimes(times) {
 
 async function registerMinuteTriggers() {
   const times = computeMinuteTimes(state.minuteTimes);
-  try { pluginApi.automation.registerMinuteTriggers('smart.listening', times, handleMinuteTrigger); } catch (e) {}
+  try { pluginApi.automation.registerMinuteTriggers('smart-listening', times, handleMinuteTrigger); } catch (e) {}
 }
 
 function handleMinuteTrigger(hhmm) {
   try {
     const payloads = [ { mode: 'sound', which: 'in' }, { mode: 'sound', which: 'in' }, { mode: 'sound', which: 'in' } ];
-    try { pluginApi.call('notify.plugin', 'enqueueBatch', [payloads]); } catch (e) {}
+    try { pluginApi.call('notify-plugin', 'enqueueBatch', [payloads]); } catch (e) {}
     functions.openSmartListening({ activate: true });
     // 自动开始播放当日第一条未完成
     const nextIdx = state.todayList.findIndex((fp) => !(state.files[fp]?.listened));
@@ -104,7 +104,7 @@ const functions = {
         title: '智慧听力',
         eventChannel: state.eventChannel,
         subscribeTopics: [state.eventChannel],
-        callerPluginId: 'smart.listening',
+        callerPluginId: 'smart-listening',
         windowMode: 'windowed_only',
         icon: 'ri-headphone-line',
         floatingSizePercent: 50,
@@ -114,7 +114,7 @@ const functions = {
         backgroundUrl: state.backgroundHome,
         floatingUrl: null
       };
-      await pluginApi.call('ui.lowbar', 'openTemplate', [params]);
+      await pluginApi.call('ui-lowbar', 'openTemplate', [params]);
       emitUpdate('centerItems', buildCenterItems());
       return true;
     } catch (e) { return { ok: false, error: e?.message || String(e) }; }
@@ -237,7 +237,7 @@ const functions = {
     } catch (e) { return { ok: false, error: e?.message || String(e) }; }
   },
   clearSchedule: async () => {
-    try { state.minuteTimes = []; persist(); pluginApi.automation.clearMinuteTriggers && pluginApi.automation.clearMinuteTriggers('smart.listening'); return { ok: true }; } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+    try { state.minuteTimes = []; persist(); pluginApi.automation.clearMinuteTriggers && pluginApi.automation.clearMinuteTriggers('smart-listening'); return { ok: true }; } catch (e) { return { ok: false, error: e?.message || String(e) }; }
   },
   listScheduleTimes: async () => { return { ok: true, times: state.minuteTimes.slice() }; },
   getDesktopPath: async () => {
@@ -287,7 +287,7 @@ const init = async (api) => {
 };
 
 module.exports = {
-  name: '智慧听力',
+  name: 'smart-listening',
   version: '0.1.0',
   init,
   functions: {
