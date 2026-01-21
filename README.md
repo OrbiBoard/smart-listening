@@ -1,11 +1,11 @@
-# smart-listening 插件
+# 自动化听力 (smart-listening)
 
-该仓库包含 OrbiBoard 主程序的 smart-listening 插件源码。
+## 简介
+支持定点播放与多目录听力管理的插件，使用底栏模板进行展示与控制。
 
-用法
-- 将本目录作为独立 Git 仓库管理。
-- 依赖请在 `plugin.json` 的 `npmDependencies` 或 `dependencies` 中声明，由主程序在运行时通过插件依赖管理安装。
+## 功能
+- **打开智慧听力**: 启动听力播放管理界面。
 
-开发
-- 页面入口：`float/settings.html` 与 `background/home.html`
-- 后端入口：`index.js`
+## 依赖
+- ui-lowbar
+- notify-plugin
