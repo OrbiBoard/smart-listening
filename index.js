@@ -1,5 +1,7 @@
 const path = require('path');
 const url = require('url');
+const os = require('os');
+const fs = require('fs');
 let pluginApi = null;
 
 const state = {
@@ -15,7 +17,6 @@ const state = {
   minuteTimes: [],
   windowIdKey: 'smart-listening-lowbar',
   defaultCenterItems: [
-    { id: 'toggle-play', text: '播放', icon: 'ri-play-line' }
   ]
 };
 
@@ -33,11 +34,8 @@ function currentAudioName() {
 
 function buildCenterItems() {
   const name = currentAudioName();
-  const playLabel = state.playing ? '暂停' : '播放';
-  const playIcon = state.playing ? 'ri-pause-line' : 'ri-play-line';
   const items = [
-    { id: 'display-name', text: (name ? name : '未选择音频'), icon: 'ri-music-2-line' },
-    ...state.defaultCenterItems.map((x) => x.id === 'toggle-play' ? { ...x, text: playLabel, icon: playIcon } : x)
+    { id: 'display-name', text: (name ? name : '未选择音频'), icon: 'ri-music-2-line' }
   ];
   return items;
 }
@@ -174,7 +172,6 @@ const functions = {
   listDirectories: async () => { return { ok: true, dirs: state.dirs.slice() }; },
   listFiles: async (dirPath) => {
     try {
-      const fs = require('fs');
       const p = String(dirPath || '').trim(); if (!p) return { ok: false, error: 'empty_dir' };
       const entries = [];
       try {
@@ -242,15 +239,28 @@ const functions = {
   listScheduleTimes: async () => { return { ok: true, times: state.minuteTimes.slice() }; },
   getDesktopPath: async () => {
     try {
-      const os = require('os');
       const home = os.homedir();
-      const guess = path.join(home, 'Desktop');
-      return { ok: true, path: guess };
-    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+      let guess = path.join(home, 'Desktop');
+      
+      // Try standard Desktop path
+      if (fs.existsSync(guess)) {
+        return { ok: true, path: guess };
+      }
+
+      // Try OneDrive path
+      const oneDrive = path.join(home, 'OneDrive', 'Desktop');
+      if (fs.existsSync(oneDrive)) {
+        return { ok: true, path: oneDrive };
+      }
+
+      // If nothing found, return home dir as fallback
+      return { ok: true, path: home };
+    } catch (e) { 
+      return { ok: false, error: e?.message || String(e) }; 
+    }
   },
   listEntries: async (dirPath) => {
     try {
-      const fs = require('fs');
       const p = String(dirPath || '').trim(); if (!p) return { ok: false, error: 'empty_dir' };
       const entries = [];
       try {

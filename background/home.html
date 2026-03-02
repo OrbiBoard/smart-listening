@@ -53,44 +53,46 @@
           <div class="hint">可拖动条目或使用上下按钮调整顺序；完成后自动移除并在文件列表中标记为已听完。</div>
         </div>
         <div class="right">
-          <div class="rtabs">
-            <div id="rtab-explorer" class="tab active"><i class="ri-folder-2-line"></i><span>文件资源管理器</span></div>
-            <div id="rtab-player" class="tab"><i class="ri-play-circle-line"></i><span>播放器</span></div>
-          </div>
           <div class="files" id="files"></div>
-          <div class="player" id="player">
-            <div class="row"><i class="ri-music-2-line"></i><span id="cur-name" class="title">未选择音频</span></div>
-            <audio id="audio" preload="metadata"></audio>
-            <div class="progress">
-              <span id="elapsed">00:00</span>
-              <input type="range" id="seek" min="0" max="100" value="0" />
-              <span id="duration">00:00</span>
-            </div>
-          </div>
+          <audio id="audio" preload="metadata" style="display:none;"></audio>
         </div>
       </div>
       
     </div>
     <script>
-      const api = () => window.lowbarAPI;
-      let gState = { dirs: [], files: {}, today: [], rate: 1.0, playing: false, currentIndex: -1 };
-      let gRightTab = 'explorer';
-      let gActiveDir = '';
-      const fmt = (sec) => {
-        const s = Math.max(0, Math.floor(sec || 0)); const m = Math.floor(s / 60); const r = s % 60;
-        return String(m).padStart(2,'0') + ':' + String(r).padStart(2,'0');
+      const api = () => {
+        if (window.lowbarAPI) return window.lowbarAPI;
+        console.error('Lowbar API not found');
+        return { pluginCall: async () => ({ ok: false, error: 'API_MISSING' }), emitEvent: () => {}, onEvent: () => {} };
       };
+      let gState = { dirs: [], files: {}, today: [], rate: 1.0, playing: false, currentIndex: -1 };
+      let gActiveDir = '';
       const $ = (sel) => document.querySelector(sel);
       const todayEl = $('#today'); const filesEl = $('#files'); const curPathEl = $('#cur-path');
-      const audio = $('#audio'); const seek = $('#seek'); const curName = $('#cur-name'); const elapsed = $('#elapsed'); const duration = $('#duration');
+      const audio = $('#audio');
 
       async function loadEntries() {
-        filesEl.innerHTML = '';
-        if (!gActiveDir) return;
+        filesEl.innerHTML = '<div style="padding:10px;color:#888;">正在加载...</div>';
+        if (!gActiveDir) {
+            filesEl.innerHTML = `<div style="padding:10px;color:#d55;">未找到桌面路径<br><small>${window._lastError || ''}</small></div>`;
+            return;
+        }
         curPathEl.textContent = gActiveDir;
         try {
-          const r = await api().pluginCall('smart-listening','listEntries',[gActiveDir]);
-          const list = (r && r.entries) || [];
+          let r = await api().pluginCall('smart-listening','listEntries',[gActiveDir]);
+          if (r && r.ok && r.result && typeof r.result === 'object') {
+             r = r.result;
+          }
+          if (!r || !r.ok) {
+             filesEl.innerHTML = `<div style="padding:10px;color:#d55;">加载失败: ${r?.error || '未知错误'}</div>`;
+             return;
+          }
+          const list = r.entries || [];
+          if (list.length === 0) {
+             filesEl.innerHTML = '<div style="padding:10px;color:#888;">文件夹为空</div>';
+             return;
+          }
+          filesEl.innerHTML = '';
           for (const it of list) {
             const row = document.createElement('div'); row.className = 'file';
             const name = document.createElement('span'); name.className = 'name'; name.textContent = it.name;
@@ -105,10 +107,17 @@
             }
             filesEl.appendChild(row);
           }
-        } catch (e) {}
+        } catch (e) {
+            filesEl.innerHTML = `<div style="padding:10px;color:#d55;">错误: ${e.message}</div>`;
+        }
       }
       async function loadToday() {
-        try { const r = await api().pluginCall('smart-listening','getState',[]); const s = r && r.ok ? r : { dirs:[], files:{}, today:[], rate:1.0, playing:false, currentIndex:-1 };
+        try { 
+            let r = await api().pluginCall('smart-listening','getState',[]); 
+            if (r && r.ok && r.result && typeof r.result === 'object') {
+                r = r.result;
+            }
+            const s = r && r.ok ? r : { dirs:[], files:{}, today:[], rate:1.0, playing:false, currentIndex:-1 };
           gState = { ...gState, dirs: s.dirs || [], files: s.files || {}, today: s.today || [], rate: s.rate || 1.0, playing: !!s.playing, currentIndex: s.currentIndex ?? -1 };
           $('#today-count').textContent = '共 ' + (gState.today.length || 0) + ' 项';
         } catch (e) {}
@@ -138,40 +147,12 @@
       }
 
       function bindAudio() {
-        audio.addEventListener('loadedmetadata', () => { duration.textContent = fmt(audio.duration); });
         audio.addEventListener('timeupdate', () => {
-          elapsed.textContent = fmt(audio.currentTime);
-          if (audio.duration && isFinite(audio.duration)) seek.value = String(Math.floor(audio.currentTime / audio.duration * 100));
           try { api().emitEvent('smart-listening-lowbar', { type:'player-progress', cur: Math.floor(audio.currentTime), dur: Math.floor(audio.duration||0) }); } catch (e) {}
         });
         audio.addEventListener('ended', () => {
           try { api().emitEvent('smart-listening-lowbar', { type:'player-ended', filePath: audio.dataset.path || '' }); } catch (e) {}
         });
-        seek.addEventListener('input', () => {
-          if (audio.duration && isFinite(audio.duration)) {
-            const pos = Math.max(0, Math.min(100, parseInt(seek.value,10)||0));
-            audio.currentTime = audio.duration * (pos / 100);
-          }
-        });
-      }
-
-      function setRightTab(mode) {
-        gRightTab = mode === 'player' ? 'player' : 'explorer';
-        const ex = document.getElementById('rtab-explorer');
-        const pl = document.getElementById('rtab-player');
-        const filesBox = document.getElementById('files');
-        const playerBox = document.getElementById('player');
-        if (gRightTab === 'explorer') {
-          ex.classList.add('active');
-          pl.classList.remove('active');
-          filesBox.style.display = 'block';
-          playerBox.style.display = 'none';
-        } else {
-          pl.classList.add('active');
-          ex.classList.remove('active');
-          filesBox.style.display = 'none';
-          playerBox.style.display = 'block';
-        }
       }
 
       function onEvent(name, data) {
@@ -179,27 +160,41 @@
         if (data.type === 'control' && data.action === 'player') {
           if (data.cmd === 'play') {
             const fp = String(data.filePath || '').trim(); if (!fp) return;
-            curName.textContent = fp.split('\\').pop();
             audio.src = 'file:///' + fp.replace(/\\/g,'/'); audio.dataset.path = fp; audio.playbackRate = Number(data.rate || gState.rate || 1.0);
             audio.load(); audio.play();
-            setRightTab('player');
           } else if (data.cmd === 'pause') {
             audio.pause();
-            setRightTab('explorer');
           } else if (data.cmd === 'resume') {
             audio.play();
-            setRightTab('player');
           } else if (data.cmd === 'rate') {
             const r = Number(data.rate || 1.0); audio.playbackRate = r;
           }
-        } else if (data.type === 'player-ended') {
-          setRightTab('explorer');
         }
       }
 
       async function init() {
         bindAudio();
-        try { const r = await api().pluginCall('smart-listening','getDesktopPath',[]); gActiveDir = (r && r.path) || gActiveDir || ''; } catch (e) {}
+        try { 
+            const r = await api().pluginCall('smart-listening','getDesktopPath',[]); 
+            console.log('getDesktopPath:', r);
+            // Handle both flat structure and wrapped {ok:true, result:{...}} structure
+            let result = r;
+            if (r && r.ok && r.result && typeof r.result === 'object') {
+                result = r.result;
+            }
+            
+            if (result && result.ok && result.path) {
+                gActiveDir = result.path;
+            } else {
+                gActiveDir = '';
+                const errMsg = result ? (result.error || JSON.stringify(result)) : 'null response';
+                window._lastError = errMsg;
+                console.warn('Desktop path not found:', errMsg);
+            }
+        } catch (e) {
+            console.error('getDesktopPath failed', e);
+            window._lastError = e.message;
+        }
         await loadToday();
         await loadEntries();
         api().onEvent(onEvent);
@@ -208,11 +203,10 @@
           const parts = gActiveDir.split('\\');
           if (parts.length > 1) { parts.pop(); const p = parts.join('\\'); if (p) { gActiveDir = p; loadEntries(); } }
         });
-        document.getElementById('rtab-explorer').addEventListener('click', () => setRightTab('explorer'));
-        document.getElementById('rtab-player').addEventListener('click', () => setRightTab('player'));
-        setRightTab(gState.playing ? 'player' : 'explorer');
       }
-      init();
+      // Wait for API injection if needed (though it should be ready)
+      if (window.lowbarAPI) init();
+      else window.addEventListener('DOMContentLoaded', init);
     </script>
   </body>
   </html>
