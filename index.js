@@ -16,8 +16,7 @@ const state = {
   rate: 1.0,
   minuteTimes: [],
   windowIdKey: 'smart-listening-lowbar',
-  defaultCenterItems: [
-  ]
+  defaultCenterItems: []
 };
 
 function emitUpdate(target, value) {
@@ -33,11 +32,7 @@ function currentAudioName() {
 }
 
 function buildCenterItems() {
-  const name = currentAudioName();
-  const items = [
-    { id: 'display-name', text: (name ? name : '未选择音频'), icon: 'ri-music-2-line' }
-  ];
-  return items;
+  return [];
 }
 
 function persist() {
@@ -80,7 +75,6 @@ function handleMinuteTrigger(hhmm) {
     const payloads = [ { mode: 'sound', which: 'in' }, { mode: 'sound', which: 'in' }, { mode: 'sound', which: 'in' } ];
     try { pluginApi.call('notify-plugin', 'enqueueBatch', [payloads]); } catch (e) {}
     functions.openSmartListening({ activate: true });
-    // 自动开始播放当日第一条未完成
     const nextIdx = state.todayList.findIndex((fp) => !(state.files[fp]?.listened));
     if (nextIdx >= 0) {
       state.currentIndex = nextIdx;
@@ -128,7 +122,10 @@ const functions = {
           const cmd = state.playing ? 'resume' : 'pause';
           pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd });
         } else if (payload.id === 'display-name') {
-          // no-op
+        } else if (payload.id === 'open-settings') {
+          const settingsPath = path.join(__dirname, 'float', 'settings.html');
+          const settingsUrl = url.pathToFileURL(settingsPath).href;
+          emitUpdate('floatingUrl', settingsUrl);
         }
       } else if (payload.type === 'player-ended') {
         const fp = String(payload.filePath || '');
@@ -145,7 +142,13 @@ const functions = {
           emitUpdate('centerItems', buildCenterItems());
         }
       } else if (payload.type === 'player-progress') {
-        // 可选：未来扩展在底栏显示进度文本
+      } else if (payload.type === 'float.settings') {
+        if (payload.settings) {
+          if (typeof payload.settings.defaultSpeed === 'number') {
+            state.rate = payload.settings.defaultSpeed;
+            persist();
+          }
+        }
       }
       return true;
     } catch (e) { return { ok: false, error: e?.message || String(e) }; }
@@ -204,7 +207,6 @@ const functions = {
   reorderToday: async (order) => {
     try {
       const arr = Array.isArray(order) ? order : [];
-      // 验证均在 todayList 之内
       const valid = arr.every((x) => state.todayList.includes(x));
       if (!valid) return { ok: false, error: 'invalid_order' };
       state.todayList = arr.slice();
@@ -242,18 +244,15 @@ const functions = {
       const home = os.homedir();
       let guess = path.join(home, 'Desktop');
       
-      // Try standard Desktop path
       if (fs.existsSync(guess)) {
         return { ok: true, path: guess };
       }
 
-      // Try OneDrive path
       const oneDrive = path.join(home, 'OneDrive', 'Desktop');
       if (fs.existsSync(oneDrive)) {
         return { ok: true, path: oneDrive };
       }
 
-      // If nothing found, return home dir as fallback
       return { ok: true, path: home };
     } catch (e) { 
       return { ok: false, error: e?.message || String(e) }; 
@@ -284,6 +283,117 @@ const functions = {
   },
   getState: async () => {
     return { ok: true, dirs: state.dirs.slice(), files: state.files, today: state.todayList.slice(), rate: state.rate, playing: state.playing, currentIndex: state.currentIndex };
+  },
+  setRate: async (rate) => {
+    try {
+      const r = Number(rate);
+      if (isNaN(r) || r <= 0) return { ok: false, error: 'invalid_rate' };
+      state.rate = Math.max(0.25, Math.min(4.0, r));
+      persist();
+      pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd: 'rate', rate: state.rate });
+      return { ok: true, rate: state.rate };
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
+  resetAllListened: async () => {
+    try {
+      const keys = Object.keys(state.files);
+      for (const key of keys) {
+        if (state.files[key]) {
+          state.files[key].listened = false;
+        }
+      }
+      persist();
+      pluginApi.emit(state.eventChannel, { type: 'update', target: 'files', value: state.files });
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
+  clearTodayList: async () => {
+    try {
+      state.todayList = [];
+      state.currentIndex = -1;
+      state.playing = false;
+      persist();
+      pluginApi.emit(state.eventChannel, { type: 'update', target: 'todayList', value: [] });
+      emitUpdate('centerItems', buildCenterItems());
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
+  playAtIndex: async (index) => {
+    try {
+      const idx = parseInt(index, 10);
+      if (isNaN(idx) || idx < 0 || idx >= state.todayList.length) {
+        return { ok: false, error: 'invalid_index' };
+      }
+      state.currentIndex = idx;
+      state.playing = true;
+      emitUpdate('centerItems', buildCenterItems());
+      pluginApi.emit(state.eventChannel, { 
+        type: 'control', 
+        action: 'player', 
+        cmd: 'play', 
+        filePath: state.todayList[idx], 
+        rate: state.rate 
+      });
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
+  pause: async () => {
+    try {
+      state.playing = false;
+      emitUpdate('centerItems', buildCenterItems());
+      pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd: 'pause' });
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
+  resume: async () => {
+    try {
+      state.playing = true;
+      emitUpdate('centerItems', buildCenterItems());
+      pluginApi.emit(state.eventChannel, { type: 'control', action: 'player', cmd: 'resume' });
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
+  playNext: async () => {
+    try {
+      if (state.todayList.length === 0) return { ok: false, error: 'empty_list' };
+      let idx = state.currentIndex + 1;
+      if (idx >= state.todayList.length) idx = 0;
+      return await functions.playAtIndex(idx);
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
+  playPrev: async () => {
+    try {
+      if (state.todayList.length === 0) return { ok: false, error: 'empty_list' };
+      let idx = state.currentIndex - 1;
+      if (idx < 0) idx = state.todayList.length - 1;
+      return await functions.playAtIndex(idx);
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+  },
+  removeFromToday: async (index) => {
+    try {
+      const idx = parseInt(index, 10);
+      if (isNaN(idx) || idx < 0 || idx >= state.todayList.length) {
+        return { ok: false, error: 'invalid_index' };
+      }
+      const fp = state.todayList[idx];
+      state.todayList.splice(idx, 1);
+      if (state.files[fp]) {
+        state.files[fp].selected = false;
+      }
+      if (state.currentIndex === idx) {
+        state.currentIndex = Math.min(state.currentIndex, state.todayList.length - 1);
+        if (state.todayList.length === 0) {
+          state.currentIndex = -1;
+          state.playing = false;
+        }
+      } else if (state.currentIndex > idx) {
+        state.currentIndex--;
+      }
+      persist();
+      pluginApi.emit(state.eventChannel, { type: 'update', target: 'todayList', value: state.todayList });
+      emitUpdate('centerItems', buildCenterItems());
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e?.message || String(e) }; }
   }
 };
 
